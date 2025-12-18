@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -23,20 +24,65 @@ interface PriceService {
 @Slf4j(topic = "Test01")
 public class Test01 {
     public static void main(String[] args) {
-        AtomicInteger callCount = new AtomicInteger(0);
-        PriceService priceService = s -> {
+        PriceSystem instance = PriceSystem.getInstance();
+        System.out.println(instance.getPriceWithRetry());
+    }
+}
+
+/**
+ * 单例模式：PriceService 系统总控台（双重检查锁优化）
+ * 线程安全  延迟加载  全局唯一
+ */
+@Slf4j(topic = "PriceSystem")
+class PriceSystem {
+    private final AtomicInteger callCount;
+    private final PriceService priceService;
+    private final PriceService proxy;
+    private final GenericRetryDecorator<String> retryDecorator;
+
+    private static volatile PriceSystem instance;
+
+    private PriceSystem() {
+        log.info("正在初始化:PriceSystem单例...");
+        this.callCount = new AtomicInteger(0);
+
+        //创建原始业务服务
+        this.priceService = s -> {
             //模拟网络超时
             if (callCount.incrementAndGet() <= 2) {
                 throw new RuntimeException("Network timeout: " + s);
             }
             return "¥89.00";
         };
-        PriceService proxy = ProxyUtil.createLoggingProxy(priceService);
+        //创建代理（日志）
+        this.proxy = ProxyUtil.createLoggingProxy(priceService);
 
-        GenericRetryDecorator<String> retryDecorator = new GenericRetryDecorator<>(
+        //加重试装饰（固定5次）
+        this.retryDecorator = new GenericRetryDecorator<>(
                 () -> proxy.getPrice("SKU"), new FixedCountPolicy(5)
         );
-        log.debug(retryDecorator.get());
+    }
+
+    public static PriceSystem getInstance() {
+        if (instance == null) {
+            synchronized (PriceSystem.class) {
+                if (instance == null) {
+                    instance = new PriceSystem();
+                    return instance;
+                }
+            }
+        }
+        return instance;
+    }
+
+    //提供对外访问方法
+    public String getPriceWithRetry() {
+        return retryDecorator.get();
+    }
+
+    //获取次数
+    public int getCallCount() {
+        return callCount.get();
     }
 }
 
@@ -127,7 +173,6 @@ class LoggerHandler implements InvocationHandler {
         log.debug("动态代理收到的请求:{}.{}({})", target.getClass().getSimpleName(), methodName, Arrays.toString(args));
         try {
             Object result = method.invoke(target, args);
-
             log.debug("动态代理收到结果：{}.{} → {}", target.getClass().getSimpleName(), methodName, result);
             return result;
         } catch (Exception e) {
