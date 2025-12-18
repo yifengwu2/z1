@@ -3,10 +3,10 @@ package com.s2;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-interface CoffeeMarker {
-    String makeCoffee();
-
-}
+//interface CoffeeMarker {
+//    String makeCoffee();
+//
+//}
 
 interface PriceService {
     String getPrice(String sku);
