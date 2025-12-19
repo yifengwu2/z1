@@ -5,14 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
-/**
- * 异常驱动的、轻量级重试装饰器
- */
+/// price-system-core —— 轻量级价格服务治理骨架
 
 /**
  * 获取价格的接口
@@ -59,7 +56,7 @@ class PriceSystem {
 
         //加重试装饰（固定5次）
         this.retryDecorator = new GenericRetryDecorator<>(
-                () -> proxy.getPrice("SKU"), new FixedCountPolicy(5)
+                () -> proxy.getPrice("sku"), new FixedCountPolicy(5)
         );
     }
 
@@ -159,7 +156,7 @@ class GenericRetryDecorator<T> implements Supplier<T> {
 /**
  * 代理模式
  */
-@Slf4j
+@Slf4j(topic = "LoggerHandler")
 class LoggerHandler implements InvocationHandler {
     private final PriceService target;
 
