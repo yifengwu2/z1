@@ -14,6 +14,10 @@ import java.util.function.Supplier;
 
 /// price-system-core —— 轻量级价格服务治理骨架
 
+//supplier提供者 无中生有 ()->结果
+//function 函数 一个参数一个结果 (参数)->结果,BigFunction(参数1，参数2)->结果
+//consumer 消费者 一个参数没结果 (参数)->void，BiConsumer(参数1，参数2)->void
+
 /**
  * 获取价格的接口
  */
@@ -25,32 +29,61 @@ interface PriceService {
  * 根据不同商品给出不同价格
  */
 interface PriceCalculate {
-    String priceCalculate(String sku);
+    String priceCalculate(String sku, PriceStage stage);
+}
+
+/**
+ * 不同商品策略
+ */
+interface PriceStage {
+    String getPriceStage();
+}
+
+// VIP 会员价策略
+class vipSku implements PriceStage {
+    @Override
+    public String getPriceStage() {
+        return "¥80.00 (VIP专享)";
+    }
+}
+
+// 秒杀价策略
+class flashSku implements PriceStage {
+    @Override
+    public String getPriceStage() {
+        return "¥59.00 (限时秒杀)";
+    }
+}
+
+// 常规价策略
+class comSku implements PriceStage {
+    @Override
+    public String getPriceStage() {
+        return "¥75.00 (标准售价)";
+    }
+}
+
+// 兜底策略
+class FallbackPricingStrategy implements PriceStage {
+    @Override
+    public String getPriceStage() {
+        return "¥89.00 (暂无特殊报价)";
+    }
 }
 
 class DefaultPriceCalculate implements PriceCalculate {
     @Override
-    public String priceCalculate(String sku) {
+    public String priceCalculate(String sku, PriceStage stage) {
         if (sku.trim().isEmpty()) {
             throw new IllegalArgumentException("sku为空");
         }
-        return switch (sku) {
-            case "VIP_SKU" -> "¥80.00";
-            case "FLASH_SKU" -> "¥59.00";
-            case "COM_SKU" -> "¥75.00";
-            default -> "¥89.00";
-        };
-    }
-}
-
-@Slf4j(topic = "Test01")
-public class Test01 {
-    public static void main(String[] args) {
-        PriceSystem system = PriceSystem.getInstance();
-//        System.out.println(instance.getPriceWithRetry());
-//        system.getPrice("A123");
-//        log.info("价格为：{}", system.getPrice("ABC123"));
-        log.info("价格为：{}", system.getPrice("FLASH_SKU"));
+        return stage.getPriceStage();
+//        return switch (sku) {
+//            case "VIP_SKU" -> "¥80.00";
+//            case "FLASH_SKU" -> "¥59.00";
+//            case "COM_SKU" -> "¥75.00";
+//            default -> "¥89.00";
+//        };
     }
 }
 
@@ -60,8 +93,13 @@ public class Test01 {
  */
 @Slf4j(topic = "PriceSystem")
 class PriceSystem {
+    //不同商品策略接口
+    private PriceStage priceStage;
+    //存不同商品对应价格
+    private static final Map<String, PriceStage> stageMap = new HashMap<>();
     //缓存
     private final Map<String, String> map = new HashMap<>();
+    //模拟网络尝试次数
     private final AtomicInteger callCount;
     //获取价格的接口
     private final PriceService priceService;
@@ -76,6 +114,12 @@ class PriceSystem {
     //单例
     private static volatile PriceSystem instance;
 
+    static {
+        stageMap.put("vip", new vipSku());
+        stageMap.put("flash", new flashSku());
+        stageMap.put("com", new comSku());
+    }
+
     private PriceSystem() {
         log.info("正在初始化:PriceSystem单例...");
         this.callCount = new AtomicInteger(0);
@@ -86,6 +130,7 @@ class PriceSystem {
 //            if ("FLASH_SKU".equals(sku)) return "¥59.00";
 //            return "¥89.00";
 //        });
+        this.priceStage = new FallbackPricingStrategy();
 
         //创建原始业务服务
         this.priceService = s -> {
@@ -93,7 +138,8 @@ class PriceSystem {
             if (callCount.incrementAndGet() <= 2) {
                 throw new RuntimeException("Network timeout: " + s);
             }
-            return priceCalculate.priceCalculate(s);
+            PriceStage stage = stageMap.getOrDefault(s, new FallbackPricingStrategy());
+            return priceCalculate.priceCalculate(s, stage);
         };
 
         //创建代理（日志）
@@ -187,7 +233,6 @@ class FixedCountPolicy implements RetryPolicy {
     }
 }
 
-
 /**
  * 重试装饰器
  */
@@ -259,6 +304,23 @@ class ProxyUtil {
         );
     }
 
+}
+
+@Slf4j(topic = "PriceSystemSmokeTest")
+public class PriceSystemSmokeTest {
+    public static void main(String[] args) {
+        PriceSystem system = PriceSystem.getInstance();
+        // 场景化命名：模拟真实业务调用
+        log.info("[SMOKE] 查询 VIP 商品价格 → {}", system.getPrice("vip"));
+        log.info("[SMOKE] 查询 秒杀商品价格 → {}", system.getPrice("flash"));
+        log.info("[SMOKE] 查询 常规商品价格 → {}", system.getPrice("com"));
+        log.info("[SMOKE] 查询 未知SKU（兜底） → {}", system.getPrice("unknown"));
+
+        //验证缓存生效（第二次查同一 SKU 不走重试）
+        log.info(" [CACHE] 第二次查 'vip'（应命中缓存）→ {}", system.getPrice("vip"));
+
+
+    }
 }
 
 
