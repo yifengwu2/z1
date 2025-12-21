@@ -3,7 +3,6 @@ package com.s2;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.swing.text.DateFormatter;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -17,7 +16,6 @@ public class AdaptTest {
         OldMachine oldMachine = new OldMachine("老式机器");
         IntelligentAdapt intelligentAdapt = new IntelligentAdapt(oldMachine);
         System.out.println(intelligentAdapt.protocol("xxxx", 2));
-
     }
 }
 
@@ -58,16 +56,16 @@ class Content {
     private final Result status;
     //封装杯数
     private final int sealed;
-    private final LocalDateTime localDateTime;
+    private final LocalDateTime timestamp;
 
     public Content(Result statue, int sealed, LocalDateTime localDateTime) {
         this.status = statue;
         this.sealed = sealed;
-        this.localDateTime = localDateTime;
+        this.timestamp = localDateTime;
     }
     private String format(){
         DateTimeFormatter pattern = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        return localDateTime.format(pattern);
+        return timestamp.format(pattern);
     }
 
     @Override
