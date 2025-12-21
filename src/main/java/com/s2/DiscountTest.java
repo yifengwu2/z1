@@ -4,6 +4,9 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Stack;
 import java.util.function.Supplier;
 
 /**
@@ -17,7 +20,7 @@ import java.util.function.Supplier;
 @Slf4j
 public class DiscountTest {
     public static void main(String[] args) {
-        VipUser vipUser = new VipUser();
+        Strategy vipUser = StrategyFactory.createUser("vip");
         System.out.println(vipUser.getStrategy(100));
     }
 
@@ -26,6 +29,7 @@ public class DiscountTest {
 /**
  * 折扣策略
  */
+@FunctionalInterface
 interface Strategy {
     SettlementReceipt getStrategy(double original);
 }
@@ -57,12 +61,29 @@ class SettlementReceipt {
                 '}';
     }
 }
+@Slf4j(topic = "StrategyFactory")
+class StrategyFactory {
+    private final static Map<String, Supplier<Strategy>> map = new HashMap<>();
 
+    static {
+        map.put("command", CommandUser::new);
+        map.put("vip", VipUser::new);
+        map.put("blackcard", BlackCard::new);
+    }
+
+
+    public static Strategy createUser(String s) {
+        Supplier<Strategy> supplier = map.getOrDefault(s, () -> {
+            log.warn("Unknown strategy key: {}", s);
+            throw new IllegalArgumentException("Unsupported strategy: " + s);
+        });
+        return supplier.get();
+    }
+}
 
 //普通用户
 @Slf4j
 class CommandUser implements Strategy {
-
     @Override
     public SettlementReceipt getStrategy(double original) {
         return new SettlementReceipt(original, 5.0, false, "无赠品");
