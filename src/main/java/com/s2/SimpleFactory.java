@@ -8,6 +8,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
+/**
+ * 简单工厂
+ */
 interface Logger {
     void log();
 }
