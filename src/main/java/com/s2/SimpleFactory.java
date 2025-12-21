@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 interface Logger {
     void log();
@@ -58,32 +59,26 @@ class RemoteLogger implements Logger {
 
 @Slf4j
 @NoArgsConstructor
+
 public class SimpleFactory {
-    private final static Map<String, Class<? extends Logger>> map = new HashMap<>();
+    private final static Map<String, Supplier<Logger>> map = new HashMap<>();
 
     static {
-        map.put("dev", ConsoleLogger.class);
-        map.put("test", FileLogger.class);
-        map.put("prod", RemoteLogger.class);
+        map.put("dev", ConsoleLogger::new);
+        map.put("test", FileLogger::new);
+        map.put("prod", RemoteLogger::new);
     }
 
     public static Logger create(String s) {
-        Class<? extends Logger> clazz = map.get(s);
-        if (clazz == null) {
-            throw new IllegalArgumentException("没有相应的日志器");
+        Supplier<Logger> supplier = map.get(s);
+        if (supplier == null) {
+            throw new IllegalArgumentException("没有获取到相应的日志器");
         }
-        try {
-            log.debug("正在创建{},日志器", clazz.getSimpleName());
-            return clazz.getConstructor().newInstance();
-        } catch (Exception e) {
-            String msg = "创建日志器" + clazz.getSimpleName() + "失败";
-            log.error(msg, e);
-            throw new RuntimeException(msg, e);
-        }
+        return supplier.get();
     }
 
     public static void main(String[] args) {
-        Logger logger = SimpleFactory.create("dev");
+        Logger logger = SimpleFactory.create("test");
         logger.log();
 
     }
