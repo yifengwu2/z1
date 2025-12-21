@@ -1,8 +1,10 @@
 package com.s2;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.sql.Statement;
+import java.util.function.Supplier;
 
 /**
  * 策略模式
@@ -15,10 +17,8 @@ import java.sql.Statement;
 @Slf4j
 public class DiscountTest {
     public static void main(String[] args) {
-        CommandUser commandUser = new CommandUser(100);
-        log.debug("{}", commandUser.getSum());
-        VipUser vipUser = new VipUser(100);
-        log.debug("{}", vipUser.getSum());
+        VipUser vipUser = new VipUser();
+        System.out.println(vipUser.getStrategy(100));
     }
 
 }
@@ -27,118 +27,62 @@ public class DiscountTest {
  * 折扣策略
  */
 interface Strategy {
-    //价格折扣
-    Double disCountStrategy();
+    SettlementReceipt getStrategy(double original);
+}
 
-    //运费策略
-    Double freightStrategy();
+class SettlementReceipt {
+    //折扣
+    private final Double discount;
+    //运费
+    private final Double freight;
+    //优惠券
+    private final Boolean coupons;
+    //其他
+    public final String remark;
 
-    //营销动作（是否发优惠券）
-    boolean isSendCoupons();
+    public SettlementReceipt(Double discount, Double freight, Boolean coupons, String remark) {
+        this.discount = discount;
+        this.freight = freight;
+        this.coupons = coupons;
+        this.remark = remark;
+    }
+
+    @Override
+    public String toString() {
+        return "SettlementReceipt{" +
+                "discount=" + discount +
+                ", freight=" + freight +
+                ", coupons=" + coupons +
+                ", remark='" + remark + '\'' +
+                '}';
+    }
 }
 
 
 //普通用户
 @Slf4j
 class CommandUser implements Strategy {
-    private int price;
-
-    public CommandUser(int price) {
-        this.price = price;
-    }
 
     @Override
-    public Double disCountStrategy() {
-        log.debug("普通用户原本价格{}->折扣后价格{}", price, price);
-        return (double) price;
+    public SettlementReceipt getStrategy(double original) {
+        return new SettlementReceipt(original, 5.0, false, "无赠品");
     }
-
-    @Override
-    public Double freightStrategy() {
-        log.debug("默认运费{}元", 5.0);
-        return 5.0;
-    }
-
-    @Override
-    public boolean isSendCoupons() {
-        log.debug("普通用户没有优惠券");
-        return false;
-    }
-
-    public Double getSum() {
-        log.debug("{}", isSendCoupons());
-        double count = disCountStrategy() + freightStrategy();
-        log.debug("用户总共价格{}", count);
-        return count;
-    }
-
 }
 
 //vip用户
 @Slf4j
 class VipUser implements Strategy {
-    private int price;
-
-    public VipUser(int price) {
-        this.price = price;
-    }
-
     @Override
-    public Double disCountStrategy() {
-        double count = price * 0.9;
-        log.debug("Vip用户原本价格{}->折扣后价格{}", price, count);
-        return count;
-    }
-
-    @Override
-    public Double freightStrategy() {
-        log.debug("默认运费{}元", 5.0);
-        return 5.0;
-    }
-
-    @Override
-    public boolean isSendCoupons() {
-        log.debug("vip用户没有优惠券");
-        return false;
-    }
-
-    public Double getSum() {
-        log.debug("{}", isSendCoupons());
-        return disCountStrategy() + freightStrategy();
+    public SettlementReceipt getStrategy(double original) {
+        return new SettlementReceipt(original * 0.9, 5.0, false, "无赠品");
     }
 }
 
 //黑卡
 @Slf4j
 class BlackCard implements Strategy {
-    private int price;
-
-    public BlackCard(int price) {
-        this.price = price;
-    }
-
     @Override
-    public Double disCountStrategy() {
-        double v = price * 0.85;
-        log.debug("黑卡用户原本价格{}->折扣后价格{}", price, v);
-        return v;
+    public SettlementReceipt getStrategy(double original) {
+        return new SettlementReceipt(original * 0.85, 0.0, true, "优先发货");
     }
-
-    @Override
-    public Double freightStrategy() {
-        log.debug("默认运费{}元", 0.0);
-        return 0.0;
-    }
-
-    @Override
-    public boolean isSendCoupons() {
-        log.debug("黑卡用户送优惠券，优先发货");
-        return true;
-    }
-
-    public Double getSum() {
-        log.debug("{}", isSendCoupons());
-        return disCountStrategy() + freightStrategy();
-    }
-
 }
