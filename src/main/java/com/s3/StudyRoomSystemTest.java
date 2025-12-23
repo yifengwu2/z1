@@ -30,13 +30,58 @@ class StudyRoomSystem {
     private final CountDownLatch countDownLatch;
     //(学生数)线程数
     private final int size;
+    //异步单一线程池（一个线程）
+    private final ExecutorService pool;
+    private final AtomicInteger auto;
+
 
     public StudyRoomSystem(int threadSize, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
         this.size = threadSize;
-        final AtomicInteger atomicInteger = new AtomicInteger(1001);
+        this.auto = new AtomicInteger(1001);
         this.countDownLatch = new CountDownLatch(threadSize);
-        this.runnable = biFunction.apply(atomicInteger, countDownLatch);
+        this.runnable = biFunction.apply(auto, countDownLatch);
+        this.pool = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread("t1");
+            t.setDaemon(false);
+            return t;
+        });
     }
+
+    public void asynImpl(int seatId) {
+        CompletableFuture<Void> future = CompletableFuture.supplyAsync(() -> {
+            int stuId = auto.getAndIncrement();
+            log.info("学生 {} 开始预约座位 1", stuId);
+            if (lock(seatId, stuId) && sign(seatId, stuId)) {
+                notifyStu();
+                return true;
+            }
+            return false;
+        }, pool).thenAccept(success -> {
+            if (success) {
+                log.info("学生成功预约并占位");
+            } else {
+                log.warn("预约失败（可能已被抢）");
+            }
+            //任务完成倒计时-1
+            countDownLatch.countDown();
+        }).exceptionally(ex -> {
+            log.error("学生预约异常");
+            countDownLatch.countDown();
+            return null;
+        });
+    }
+
+    public void awaitAllTask() throws InterruptedException {
+        countDownLatch.await();
+        pool.shutdown();
+        pool.awaitTermination(5, TimeUnit.SECONDS);
+    }
+
+    //通知
+    public void notifyStu() {
+        System.out.println("成功预约并占位");
+    }
+
 
     public void execute() throws InterruptedException {
         for (int i = 0; i < size; i++) {
@@ -49,6 +94,7 @@ class StudyRoomSystem {
             });
             t.start();
         }
+
         boolean await = countDownLatch.await(5, TimeUnit.SECONDS);
         if (await) {
             System.out.println("所有任务已完成");
