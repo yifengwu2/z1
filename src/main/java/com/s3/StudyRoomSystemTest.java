@@ -11,14 +11,16 @@ import java.util.function.BiFunction;
 
 public class StudyRoomSystemTest {
     public static void main(String[] args) throws InterruptedException {
-        StudyRoomSystem studyRoomSystem = new StudyRoomSystem(5, (auto, count) -> () -> {
-            int stuId = auto.getAndIncrement();
-            boolean success = StudyRoomSystem.lock(1, stuId);
-            count.countDown();
-        });
-        studyRoomSystem.execute();
-        Seat seat = studyRoomSystem.getSeats().get(1);
-        System.out.println("\n 最终 seat 1 状态: " + seat.getStatus() + ", stuId=" + seat.getStuId());
+        int stuCount = 50;
+        StudyRoomSystem studyRoomSystem = new StudyRoomSystem(1, stuCount, null);
+
+        for (int i = 0; i < stuCount; i++) {
+            new Thread(() -> {
+                studyRoomSystem.asynImpl(1);
+            },"Student-"+(1001+i)).start();
+        }
+        studyRoomSystem.awaitAllTask();
+
 
     }
 }
@@ -26,28 +28,36 @@ public class StudyRoomSystemTest {
 @Slf4j(topic = "StudyRoomSystem")
 class StudyRoomSystem {
     private final static ConcurrentHashMap<Integer, Seat> seats = new ConcurrentHashMap<>();
-    private final Runnable runnable;
+//    private final Runnable runnable;
     private final CountDownLatch countDownLatch;
     //(学生数)线程数
-    private final int size;
+//    private final int size;
     //异步单一线程池（一个线程）
     private final ExecutorService pool;
     private final AtomicInteger auto;
+    //座位id
+    private int seatId;
 
 
-    public StudyRoomSystem(int threadSize, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
-        this.size = threadSize;
+    public StudyRoomSystem(int seatId, int stuCount, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
+//        this.size = threadSize;
         this.auto = new AtomicInteger(1001);
-        this.countDownLatch = new CountDownLatch(threadSize);
-        this.runnable = biFunction.apply(auto, countDownLatch);
+        this.countDownLatch = new CountDownLatch(stuCount);
+//        this.runnable = biFunction.apply(auto, countDownLatch);
         this.pool = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread("t1");
-            t.setDaemon(false);
+            t.setDaemon(true);
             return t;
         });
+        this.seatId = seatId;
     }
 
     public void asynImpl(int seatId) {
+        if (seatId <= 0) {
+            log.error("无效抢座{}", seatId);
+            countDownLatch.countDown();
+            return;
+        }
         CompletableFuture<Void> future = CompletableFuture.supplyAsync(() -> {
             int stuId = auto.getAndIncrement();
             log.info("学生 {} 开始预约座位 1", stuId);
@@ -82,25 +92,26 @@ class StudyRoomSystem {
         System.out.println("成功预约并占位");
     }
 
+    public void execute() {
+//        for (int i = 0; i < size; i++) {
+//            Thread t = new Thread(() -> {
+//                try {
+//                    runnable.run();
+//                } finally {
+//                    countDownLatch.countDown();
+//                }
+//            });
+//            t.start();
+//        }
+//
+//        boolean await = countDownLatch.await(5, TimeUnit.SECONDS);
+//        if (await) {
+//            System.out.println("所有任务已完成");
+//        } else {
+//            System.out.println("超时，有任务卡住");
+//        }
+        asynImpl(seatId);
 
-    public void execute() throws InterruptedException {
-        for (int i = 0; i < size; i++) {
-            Thread t = new Thread(() -> {
-                try {
-                    runnable.run();
-                } finally {
-                    countDownLatch.countDown();
-                }
-            });
-            t.start();
-        }
-
-        boolean await = countDownLatch.await(5, TimeUnit.SECONDS);
-        if (await) {
-            System.out.println("所有任务已完成");
-        } else {
-            System.out.println("超时，有任务卡住");
-        }
 
     }
 
@@ -114,8 +125,8 @@ class StudyRoomSystem {
 
     //生成100个座位
     static {
-        log.debug("正在生成100个座位...");
-        for (int i = 1; i <= 100; i++) {
+        log.debug("正在生成座位...");
+        for (int i = 1; i <= 50; i++) {
             seats.put(i, new Seat(i));
         }
         //启动后每30秒执行一次任务
