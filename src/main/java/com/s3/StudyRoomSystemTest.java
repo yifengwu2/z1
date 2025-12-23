@@ -1,46 +1,52 @@
 package com.s3;
 
 
-import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 
 
 public class StudyRoomSystemTest {
-    public static void main(String[] args) {
-        StudyRoomSystem studyRoomSystem = new StudyRoomSystem();
-        AtomicInteger atomicInteger = new AtomicInteger(1001);
-        Runnable r = () -> {
-            int i = atomicInteger.getAndIncrement();
-            boolean success = studyRoomSystem.lock(1, i);
-            System.out.println("Thread" + i + "lock()" + success);
-        };
-        List<Thread> list = new ArrayList<>();
-        for (int i = 0; i < 2; i++) {
-            Thread thread = new Thread(r);
-            list.add(thread);
-        }
-        list.forEach(Thread::start);
-        list.forEach(t -> {
-            try {
-                t.join();
-            } catch (InterruptedException e) {
-                System.out.println(e.getMessage());
-            }
+    public static void main(String[] args) throws InterruptedException {
+        StudyRoomSystem studyRoomSystem = new StudyRoomSystem(5, (auto, count) -> () -> {
+            int stuId = auto.getAndIncrement();
+            boolean success = StudyRoomSystem.lock(1, stuId);
+            System.out.println("stu:" + stuId + "lock:" + success);
+            count.countDown();
         });
-        ConcurrentHashMap<Integer, Seat> seats = studyRoomSystem.getSeats();
-        Seat seat = seats.get(1);
-        System.out.println(seat.getStatus());
-        System.out.println(seat.getStuId());
+        studyRoomSystem.execute();
 
     }
 }
 
 class StudyRoomSystem {
     private final static ConcurrentHashMap<Integer, Seat> seats = new ConcurrentHashMap<>();
+    private final Runnable runnable;
+    private final CountDownLatch countDownLatch;
+    //(学生数)线程数
+    private final int size;
+
+    public StudyRoomSystem(int threadSize, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
+        this.size = threadSize;
+        AtomicInteger atomicInteger = new AtomicInteger(1001);
+        this.countDownLatch = new CountDownLatch(threadSize);
+        this.runnable = biFunction.apply(atomicInteger, countDownLatch);
+    }
+
+    public void execute() throws InterruptedException {
+            for (int i = 0; i < size; i++) {
+                Thread t = new Thread(runnable);
+                t.start();
+            }
+            boolean await = countDownLatch.await(3, TimeUnit.SECONDS);
+            if (await) {
+                System.out.println("所有任务已完成");
+            } else {
+                System.out.println("超时，有任务卡住");
+            }
+
+    }
 
     private static final ScheduledExecutorService cleaner =
             Executors.newSingleThreadScheduledExecutor((r -> {
@@ -62,7 +68,7 @@ class StudyRoomSystem {
     }
 
     //预约座位
-    public boolean lock(int seatId, int stuId) {
+    public static boolean lock(int seatId, int stuId) {
         Seat compute = seats.compute(seatId, (k, v) -> {
             long epochMilli = Instant.now().plusSeconds(30 * 60).toEpochMilli();
             if (v == null || v.getStatus() != Status.IDLE) {
@@ -88,6 +94,7 @@ class StudyRoomSystem {
         return compute != null && compute.getStatus() == Status.Full;
     }
 
+    //清理预约过期座位
     private static void cleanupExpiredLocks() {
         seats.forEach((seatId, seat) -> {
             if (seat.getStatus() == Status.LOCKED && seat.isExpired()) {
