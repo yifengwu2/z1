@@ -1,6 +1,8 @@
 package com.s3;
 
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.time.Instant;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -12,14 +14,16 @@ public class StudyRoomSystemTest {
         StudyRoomSystem studyRoomSystem = new StudyRoomSystem(5, (auto, count) -> () -> {
             int stuId = auto.getAndIncrement();
             boolean success = StudyRoomSystem.lock(1, stuId);
-            System.out.println("stu:" + stuId + "lock:" + success);
             count.countDown();
         });
         studyRoomSystem.execute();
+        Seat seat = studyRoomSystem.getSeats().get(1);
+        System.out.println("\n 最终 seat 1 状态: " + seat.getStatus() + ", stuId=" + seat.getStuId());
 
     }
 }
 
+@Slf4j(topic = "StudyRoomSystem")
 class StudyRoomSystem {
     private final static ConcurrentHashMap<Integer, Seat> seats = new ConcurrentHashMap<>();
     private final Runnable runnable;
@@ -29,22 +33,28 @@ class StudyRoomSystem {
 
     public StudyRoomSystem(int threadSize, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
         this.size = threadSize;
-        AtomicInteger atomicInteger = new AtomicInteger(1001);
+        final AtomicInteger atomicInteger = new AtomicInteger(1001);
         this.countDownLatch = new CountDownLatch(threadSize);
         this.runnable = biFunction.apply(atomicInteger, countDownLatch);
     }
 
     public void execute() throws InterruptedException {
-            for (int i = 0; i < size; i++) {
-                Thread t = new Thread(runnable);
-                t.start();
-            }
-            boolean await = countDownLatch.await(3, TimeUnit.SECONDS);
-            if (await) {
-                System.out.println("所有任务已完成");
-            } else {
-                System.out.println("超时，有任务卡住");
-            }
+        for (int i = 0; i < size; i++) {
+            Thread t = new Thread(() -> {
+                try {
+                    runnable.run();
+                } finally {
+                    countDownLatch.countDown();
+                }
+            });
+            t.start();
+        }
+        boolean await = countDownLatch.await(5, TimeUnit.SECONDS);
+        if (await) {
+            System.out.println("所有任务已完成");
+        } else {
+            System.out.println("超时，有任务卡住");
+        }
 
     }
 
@@ -58,6 +68,7 @@ class StudyRoomSystem {
 
     //生成100个座位
     static {
+        log.debug("正在生成100个座位...");
         for (int i = 1; i <= 100; i++) {
             seats.put(i, new Seat(i));
         }
@@ -76,7 +87,13 @@ class StudyRoomSystem {
             }
             return new Seat(k, stuId, Status.LOCKED, epochMilli);
         });
-        return compute != null && compute.getStatus() == Status.LOCKED && compute.getStuId() == stuId;
+        boolean success = compute != null && compute.getStatus() == Status.LOCKED && compute.getStuId() == stuId;
+        if (success) {
+            log.debug("预约成功，请尽快到达座位...");
+        } else {
+            log.debug("预约失败请重新预约");
+        }
+        return success;
     }
 
     public ConcurrentHashMap<Integer, Seat> getSeats() {
@@ -91,7 +108,13 @@ class StudyRoomSystem {
             }
             return new Seat(k, stuId, Status.Full, 0);
         });
-        return compute != null && compute.getStatus() == Status.Full;
+        boolean success = compute != null && compute.getStatus() == Status.Full;
+        if (success) {
+            log.debug("{}签到成功，当前状态{}", Thread.class.getSimpleName(), compute.getStatus());
+        } else {
+            log.debug("签到失败或已过期");
+        }
+        return success;
     }
 
     //清理预约过期座位
@@ -104,7 +127,6 @@ class StudyRoomSystem {
             }
         });
     }
-
 }
 
 
