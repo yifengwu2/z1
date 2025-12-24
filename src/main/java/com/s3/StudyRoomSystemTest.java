@@ -37,6 +37,13 @@ class StudyRoomSystem {
     private final AtomicInteger auto;
     //座位id
     private int seatId;
+    //清理线程池
+    private static final ScheduledExecutorService cleaner =
+            Executors.newSingleThreadScheduledExecutor((r -> {
+                Thread t = new Thread(r, "Cleanup-Thread");
+                t.setDaemon(true);
+                return t;
+            }));
 
 
     public StudyRoomSystem(int seatId, int stuCount, BiFunction<AtomicInteger, CountDownLatch, Runnable> biFunction) {
@@ -115,12 +122,7 @@ class StudyRoomSystem {
 
     }
 
-    private static final ScheduledExecutorService cleaner =
-            Executors.newSingleThreadScheduledExecutor((r -> {
-                Thread t = new Thread(r, "Cleanup-Thread");
-                t.setDaemon(true);
-                return t;
-            }));
+
 
 
     //生成100个座位
