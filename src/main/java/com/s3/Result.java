@@ -1,4 +1,6 @@
 package com.s3;
 
-public class Result {
+enum Result {
+    LOG,//已登陆
+    NotLOG,//未登录
 }
