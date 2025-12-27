@@ -64,11 +64,11 @@ class User implements Observer {
 
 
 @Slf4j(topic = "Order")
-class Order {
+class Order1 {
     private String status;
     private final List<Observer> observers = new ArrayList<>();
 
-    public Order() {
+    public Order1() {
         this.status="NotShipped";
     }
 
