@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class LoginTest {
     public static void main(String[] args) {
-
+        LoginSystem system = new LoginSystem(4, 50);
+        system.execute();
 
     }
 
@@ -30,12 +31,7 @@ class LoginSystem {
 
 
     public LoginSystem(int consumer, int size) {
-        this.pool = Executors.newSingleThreadExecutor(r -> {
-            Thread t = new Thread(r);
-            t.setName("t1");
-            t.setDaemon(true);
-            return t;
-        });
+        this.pool = Executors.newFixedThreadPool(4);
         this.consumer = consumer;
         this.size = size;
         this.latch = new CountDownLatch(size);
@@ -106,8 +102,9 @@ class LoginSystem {
         }, pool).thenApplyAsync(user1 -> {
             if (checkPassword(user1) && isLogin(user1)) {
                 return true;
+            } else {
+                return false;
             }
-            return false;
         }, pool).thenAccept(b -> {
             if (b) {
                 System.out.println("登陆成功");
