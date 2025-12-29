@@ -18,6 +18,9 @@ import java.util.concurrent.TimeUnit;
  * 💰 营销服务（触发优惠券发放）
  */
 public class SaaSSystem {
+    public static void main(String[] args) {
+
+    }
 
 }
 
@@ -111,6 +114,7 @@ class SUser {
                     break;
                 }
             }
+
         });
     }
 
